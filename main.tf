@@ -8,88 +8,62 @@ terraform {
 }
 
 provider "snowflake" {
-    role = "SYSADMIN"
+    role = var.account_overseeing_role
     organization_name = "djuocbc"
     account_name = "qm18297"
     authenticator = "SNOWFLAKE_JWT"
 }
 
-resource "snowflake_role" "role" {
-  provider = snowflake.security_admin
-  name     = "TF_DEMO_SVC_ROLE"
+module "account_role" {
+  source = "./modules/account_role"
+  names = var.roles
 }
 
-resource "snowflake_database" "db" {
-  name = "TF_DEMO"
+module "database" {
+  source = "./modules/database"
+  names = var.databases
 }
 
-resource "snowflake_warehouse" "warehouse" {
-  name           = "TF_DEMO"
-  warehouse_size = "xsmall"
-  auto_suspend   = 60
-}
+# module "schema" {
+#   source = "./modules/schema"
+#   database = module.database.name
+#   name = "TF_DEMO_SCHEMA"
+# }
 
-resource "snowflake_grant_privileges_to_account_role" "database_grant" {
-  provider          = snowflake.security_admin
-  privileges        = ["USAGE"]
-  account_role_name = snowflake_role.role.name
-  on_account_object {
-    object_type = "DATABASE"
-    object_name = snowflake_database.db.name
-  }
-}
+# module "warehouse" {
+#   source = "./modules/warehouse"
+#   name = "TF_DEMO_WH"
+#   size = "xsmall"
+#   auto_suspend = 60
+# }
 
-resource "snowflake_schema" "schema" {
-  database   = snowflake_database.db.name
-  name       = "TF_DEMO"
-  is_managed = false
-}
+# module "user"{
+#   source = "./modules/user"
+#   name = "tf_demo_user"
+#   warehouse = module.warehouse.name
+#   database = module.database.name
+#   schema = module.schema.name
+#   role = module.account_role.name
+# }
 
-resource "snowflake_grant_privileges_to_account_role" "schema_grant" {
-  provider          = snowflake.security_admin
-  privileges        = ["USAGE"]
-  account_role_name = snowflake_role.role.name
-  on_schema {
-    schema_name = "\"${snowflake_database.db.name}\".\"${snowflake_schema.schema.name}\""
-  }
-}
+# module "grant_privileges_to_account_role_generic"{
+#   source = "./modules/grant_privileges_to_account_role/generic"
+#   privileges = ["USAGE"]
+#   object_type = "DATABASE"
+#   object_name = module.database.name
+#   role_name = module.account_role.name
+# }
 
-resource "snowflake_grant_privileges_to_account_role" "warehouse_grant" {
-  provider          = snowflake.security_admin
-  privileges        = ["USAGE"]
-  account_role_name = snowflake_role.role.name
-  on_account_object {
-    object_type = "WAREHOUSE"
-    object_name = snowflake_warehouse.warehouse.name
-  }
-}
+# module "grant_privileges_to_account_role_schema"{
+#   source = "./modules/grant_privileges_to_account_role/schema"
+#   privileges = ["USAGE"]
+#   database = module.database.name
+#   schema = module.schema.name
+#   role = module.account_role.name
+# }
 
-resource "tls_private_key" "svc_key" {
-  algorithm = "RSA"
-  rsa_bits  = 2048
-}
-
-resource "snowflake_user" "user" {
-    provider          = snowflake.security_admin
-    name              = "tf_demo_user"
-    default_warehouse = snowflake_warehouse.warehouse.name
-    default_role      = snowflake_role.role.name
-    default_namespace = "${snowflake_database.db.name}.${snowflake_schema.schema.name}"
-    rsa_public_key    = substr(tls_private_key.svc_key.public_key_pem, 27, 398)
-}
-
-resource "snowflake_grant_privileges_to_account_role" "user_grant" {
-  provider          = snowflake.security_admin
-  privileges        = ["MONITOR"]
-  account_role_name = snowflake_role.role.name  
-  on_account_object {
-    object_type = "USER"
-    object_name = snowflake_user.user.name
-  }
-}
-
-resource "snowflake_grant_account_role" "grants" {
-  provider  = snowflake.security_admin
-  role_name = snowflake_role.role.name
-  user_name = snowflake_user.user.name
-}
+# module "grant_account_role"{
+#   source = "./modules/grant_account_role"
+#   role = module.account_role.name
+#   user = module.user.name
+# }
